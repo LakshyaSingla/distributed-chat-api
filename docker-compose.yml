@@ -1,0 +1,42 @@
+version: '3.9'
+
+services:
+  postgres:
+    image: postgres:15-alpine
+    container_name: chat_postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-chatuser}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-chatpassword}
+      POSTGRES_DB: ${POSTGRES_DB:-chatdb}
+    ports:
+      - '5432:5432'
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U ${POSTGRES_USER:-chatuser}']
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  mongo:
+    image: mongo:7.0
+    container_name: chat_mongo
+    restart: unless-stopped
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: ${MONGO_USER:-chatuser}
+      MONGO_INITDB_ROOT_PASSWORD: ${MONGO_PASSWORD:-chatpassword}
+      MONGO_INITDB_DATABASE: ${MONGO_DB:-chatdb}
+    ports:
+      - '27017:27017'
+    volumes:
+      - mongo_data:/data/db
+    healthcheck:
+      test: ['CMD', 'mongosh', '--eval', "db.adminCommand('ping')"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  postgres_data:
+  mongo_data:
