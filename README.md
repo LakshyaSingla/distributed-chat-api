@@ -31,74 +31,136 @@ Browser (Demo UI)
 | Feature | Details |
 |---------|---------|
 | 🔐 OAuth 2.0 | Google + GitHub via Passport.js |
-| 🔑 JWT Auth | Access (15m) + Refresh (7d) with token rotation |
-| 🔄 Real-time | Socket.io with auto-reconnect |
-| 💬 Messaging | Persist to MongoDB, cursor-based pagination |
+| 🔑 JWT Auth | Access (15m) + Refresh (7d) with token rotation & reuse detection |
+| 🔄 Real-time | Socket.io with rooms, auto-reconnect |
+| 💬 Messaging | Persisted to MongoDB, cursor-based pagination |
 | 👥 Presence | Live online/offline status per room |
-| ⌨️ Typing | Real-time typing indicators |
+| ⌨️ Typing | Real-time typing indicators with debounce |
 | 🏠 Rooms | Public/private rooms with role-based membership |
-| 🛡 Security | Rate limiting, JWT guard, input validation (Joi) |
-| 🐳 Docker | One-command database startup |
+| 🛡 Security | Rate limiting, JWT guard, input validation (Joi), bcrypt token hashing |
+| 🐳 Docker | Optional Docker Compose for containerized DB setup |
 
 ---
 
 ## 📋 Prerequisites
 
-- **Node.js** v18+ ([nodejs.org](https://nodejs.org))
-- **Docker Desktop** ([docker.com/products/docker-desktop](https://www.docker.com/products/docker-desktop)) — free
+- **Node.js** v18+ — [nodejs.org](https://nodejs.org)
+- **PostgreSQL** v15+ — [postgresql.org/download](https://www.postgresql.org/download/)
+- **MongoDB** v7+ — [mongodb.com/try/download/community](https://www.mongodb.com/try/download/community)
 
 ---
 
 ## 🚀 Quick Start
 
-### 1. Clone / open the project
+### 1. Clone the repository
 
 ```bash
+git clone https://github.com/LakshyaSingla/distributed-chat-api.git
 cd distributed-chat-api
 ```
 
-### 2. Set up environment variables
+### 2. Install dependencies
+
+```bash
+npm install
+```
+
+### 3. Set up PostgreSQL
+
+After installing PostgreSQL, open **SQL Shell (psql)** and run:
+
+```sql
+CREATE USER chatuser WITH PASSWORD 'chatpassword';
+CREATE DATABASE chatdb OWNER chatuser;
+GRANT ALL PRIVILEGES ON DATABASE chatdb TO chatuser;
+\q
+```
+
+### 4. Set up MongoDB
+
+Install MongoDB Community Server and ensure it's running as a service.
+No configuration needed — the app connects to `localhost:27017` without auth by default.
+
+```bash
+# Verify MongoDB is running (Windows)
+Get-Service -Name MongoDB
+
+# macOS/Linux
+sudo systemctl status mongod
+```
+
+### 5. Configure environment variables
 
 ```bash
 cp .env.example .env
 ```
 
-Then edit `.env` with your OAuth credentials (see below).
+Edit `.env` and fill in your OAuth credentials (see below for how to get them):
 
-### 3. Create OAuth credentials (free)
+```env
+GOOGLE_CLIENT_ID=your_google_client_id
+GOOGLE_CLIENT_SECRET=your_google_client_secret
+GITHUB_CLIENT_ID=your_github_client_id
+GITHUB_CLIENT_SECRET=your_github_client_secret
 
-#### Google
-
-1. Go to [console.cloud.google.com/apis/credentials](https://console.cloud.google.com/apis/credentials)
-2. Click **Create Credentials → OAuth client ID**
-3. Application type: **Web application**
-4. Authorized redirect URI: `http://localhost:3000/auth/google/callback`
-5. Copy **Client ID** and **Client Secret** → paste into `.env`
-
-#### GitHub
-
-1. Go to [github.com/settings/developers](https://github.com/settings/developers) → **New OAuth App**
-2. Homepage URL: `http://localhost:3000`
-3. Authorization callback URL: `http://localhost:3000/auth/github/callback`
-4. Copy **Client ID** and generate a **Client Secret** → paste into `.env`
-
-### 4. Start databases
-
-```bash
-docker-compose up -d
+# Optional — change if your DB credentials differ
+POSTGRES_USER=chatuser
+POSTGRES_PASSWORD=chatpassword
+POSTGRES_DB=chatdb
+MONGO_URI=mongodb://localhost:27017/chatdb
+JWT_SECRET=any_long_random_string_at_least_32_chars
 ```
 
-This starts PostgreSQL 15 and MongoDB 7 with persistent volumes.
+### 6. Get OAuth credentials (free)
 
-### 5. Start the server
+**Google:**
+1. Go to [console.cloud.google.com/apis/credentials](https://console.cloud.google.com/apis/credentials)
+2. Create an OAuth client ID → Web application
+3. Add authorized redirect URI: `http://localhost:3000/auth/google/callback`
+4. Copy Client ID and Secret → paste into `.env`
+
+**GitHub:**
+1. Go to [github.com/settings/developers](https://github.com/settings/developers) → New OAuth App
+2. Authorization callback URL: `http://localhost:3000/auth/github/callback`
+3. Copy Client ID and Secret → paste into `.env`
+
+### 7. Start the server
 
 ```bash
 npm run dev
 ```
 
-### 6. Open the demo UI
+Expected output:
+```
+✅ PostgreSQL connected
+✅ PostgreSQL models synced
+✅ MongoDB connected
+🚀 Server running at http://localhost:3000
+🎮 Demo UI:       http://localhost:3000/demo
+❤️  Health check: http://localhost:3000/health
+```
 
-Navigate to **[http://localhost:3000/demo](http://localhost:3000/demo)**
+> Sequelize automatically creates all database tables on first run.
+
+### 8. Open the demo UI
+
+Navigate to **[http://localhost:3000/demo](http://localhost:3000/demo)**, sign in with Google or GitHub, create a room, and open a second tab to chat in real time.
+
+---
+
+## 🐳 Alternative: Docker Setup
+
+If you have Docker Desktop installed, you can run the databases without a native install:
+
+```bash
+docker-compose up -d   # starts PostgreSQL + MongoDB
+npm run dev
+```
+
+```bash
+docker-compose down    # stop databases (keeps data)
+docker-compose down -v # stop and wipe all data
+```
 
 ---
 
@@ -161,32 +223,36 @@ const socket = io('http://localhost:3000', {
 
 ### Server → Client
 
-| Event | Payload | Description |
-|-------|---------|-------------|
-| `new_message` | Message object | Incoming message |
-| `message_edited` | Updated message | Message updated |
-| `message_deleted` | `{ messageId }` | Tombstone |
-| `room_joined` | `{ roomId, onlineUsers }` | Confirmation |
-| `user_joined` | `{ roomId, userId, username }` | User entered room |
-| `user_left` | `{ roomId, userId, username }` | User left room |
-| `presence_update` | `{ userId, status }` | Online/offline |
-| `user_typing` | `{ roomId, userId, username, typing }` | Typing indicator |
-| `error` | `{ message }` | Error event |
+| Event | Description |
+|-------|-------------|
+| `new_message` | Incoming message broadcast to room |
+| `message_edited` | Updated message object |
+| `message_deleted` | Tombstone `{ messageId }` |
+| `room_joined` | Confirmation + current online users |
+| `user_joined` | User entered room |
+| `user_left` | User left room |
+| `presence_update` | Online/offline status change |
+| `user_typing` | Typing indicator relay |
+| `error` | Auth or validation error |
 
 ---
 
 ## 🗄 Data Models
 
-### PostgreSQL (relational)
+### PostgreSQL (Sequelize)
 
-- **User** — id, username, email, avatarUrl, provider, providerId
-- **Room** — id, name, description, isPrivate, createdBy
-- **RoomMember** — userId, roomId, role (admin/member)
-- **RefreshToken** — userId, tokenHash (bcrypt), expiresAt, revokedAt
+| Model | Key Fields |
+|-------|-----------|
+| `User` | id, username, email, avatarUrl, provider, providerId, providerKey |
+| `Room` | id, name, description, isPrivate, createdBy |
+| `RoomMember` | userId, roomId, role (admin/member), joinedAt |
+| `RefreshToken` | userId, tokenHash (bcrypt), expiresAt, revokedAt |
 
-### MongoDB (unstructured)
+### MongoDB (Mongoose)
 
-- **Message** — roomId, senderId, senderUsername, content, type, editedAt, deleted
+| Model | Key Fields |
+|-------|-----------|
+| `Message` | roomId, senderId, senderUsername, content, type, editedAt, deleted |
 
 ---
 
@@ -205,23 +271,35 @@ distributed-chat-api/
 │   ├── services/        # Business logic
 │   ├── websocket/       # Socket.io gateway, handlers, presence
 │   └── app.js           # Entry point
-├── demo/                # Browser chat UI
+├── demo/                # Browser chat UI (vanilla JS)
 │   ├── index.html
 │   ├── style.css
 │   └── app.js
-├── docker-compose.yml
-├── .env.example
+├── docker-compose.yml   # Optional: containerized DB setup
+├── .env.example         # Environment variable template
 └── README.md
 ```
 
 ---
 
-## 🛑 Stopping
+## 🛠 Tech Stack
 
-```bash
-# Stop the server: Ctrl+C
-# Stop databases:
-docker-compose down
-# Stop and remove all data:
-docker-compose down -v
-```
+| Concern | Library |
+|---------|---------|
+| HTTP Framework | Express.js |
+| WebSockets | Socket.io |
+| Google OAuth | passport-google-oauth20 |
+| GitHub OAuth | passport-github2 |
+| JWT | jsonwebtoken |
+| Token hashing | bcryptjs |
+| PostgreSQL ORM | Sequelize + pg |
+| MongoDB ODM | Mongoose |
+| Validation | Joi |
+| Rate limiting | express-rate-limit |
+| Env validation | envalid |
+
+---
+
+## 📄 License
+
+MIT
