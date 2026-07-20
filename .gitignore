@@ -4,6 +4,10 @@ npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 
+# ─── Personal / Private files ──────────────────────────
+INTERVIEW_PREP*.md
+
+
 # ─── Environment Variables (NEVER commit these) ────────
 .env
 .env.local
