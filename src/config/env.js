@@ -6,6 +6,9 @@ const env = cleanEnv(process.env, {
   NODE_ENV: str({ choices: ['development', 'production', 'test'], default: 'development' }),
   PORT: port({ default: 3000 }),
 
+  // Public URL of this server (used for OAuth callback URLs)
+  // In production: set this to your deployed URL e.g. https://your-app.railway.app
+  APP_URL: str({ default: 'http://localhost:3000' }),
   // PostgreSQL
   POSTGRES_USER:     str(),
   POSTGRES_PASSWORD: str(),

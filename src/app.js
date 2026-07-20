@@ -21,7 +21,10 @@ require('./models/pg/index');
 // ── Express App ──────────────────────────────────────────────────────────────
 const app = express();
 
-app.use(cors({ origin: env.CLIENT_URL, credentials: true }));
+// Allow requests from the frontend (same origin in prod, localhost in dev)
+const allowedOrigins = [...new Set([env.CLIENT_URL, env.APP_URL, env.APP_URL + '/demo'])];
+app.use(cors({ origin: allowedOrigins, credentials: true }));
+
 app.use(express.json({ limit: '1mb' }));
 app.use(express.urlencoded({ extended: true }));
 app.use(morgan(env.NODE_ENV === 'development' ? 'dev' : 'combined'));
